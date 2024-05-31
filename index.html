@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Move Objects in 3D Room with Babylon.js</title>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<script>
+    // Get the canvas element
+    const canvas = document.getElementById("renderCanvas");
+
+    // Generate the Babylon.js 3D engine
+    const engine = new BABYLON.Engine(canvas, true);
+
+    // Create the scene
+    const createScene = function () {
+        const scene = new BABYLON.Scene(engine);
+
+        // Set the background color to light blue
+        scene.clearColor = new BABYLON.Color3(0.68, 0.85, 0.90);
+
+        // Create a camera and position it
+        const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 4, 150, BABYLON.Vector3.Zero(), scene);
+        camera.attachControl(canvas, true);
+
+        // Create a light
+        const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(1, 1, 0), scene);
+
+        // Create the room
+        const roomSize = 100;
+        const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: roomSize, height: roomSize }, scene);
+        const walls = [];
+        const wallMaterial = new BABYLON.StandardMaterial("wallMaterial", scene);
+        wallMaterial.diffuseColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+
+        // Create walls
+        for (let i = 0; i < 4; i++) {
+            const wall = BABYLON.MeshBuilder.CreateBox("wall" + i, { width: roomSize, height: 10, depth: 1 }, scene);
+            wall.material = wallMaterial;
+            if (i % 2 === 0) {
+                wall.position.z = (i === 0) ? -roomSize / 2 : roomSize / 2;
+            } else {
+                wall.position.x = (i === 1) ? -roomSize / 2 : roomSize / 2;
+                wall.rotation.y = Math.PI / 2;
+            }
+            walls.push(wall);
+        }
+
+        // Create objects to move
+        const objects = [];
+        const sphereMaterial = new BABYLON.StandardMaterial("sphereMaterial", scene);
+        sphereMaterial.diffuseColor = new BABYLON.Color3(0.1, 0.1, 0.1); // Dark color
+
+        for (let i = 0; i < 5; i++) {
+            const sphere = BABYLON.MeshBuilder.CreateSphere("sphere" + i, { diameter: 5 }, scene);
+            sphere.position.y = 2.5;
+            sphere.position.x = (i - 2) * 15;
+            sphere.position.z = (i % 2 === 0) ? -15 : 15;
+            objects.push(sphere);
+        }
+
+        // Implement object movement
+        let selectedObject = null;
+        let startingPoint;
+        let currentMesh;
+
+        const getGroundPosition = function() {
+            const pickinfo = scene.pick(scene.pointerX, scene.pointerY, function (mesh) {
+                return mesh === ground;
+            });
+            if (pickinfo.hit) {
+                return pickinfo.pickedPoint;
+            }
+            return null;
+        };
+
+        const onPointerDown = function(evt) {
+            if (evt.button !== 0) {
+                return;
+            }
+
+            const pickInfo = scene.pick(scene.pointerX, scene.pointerY, function(mesh) {
+                return objects.includes(mesh);
+            });
+
+            if (pickInfo.hit) {
+                currentMesh = pickInfo.pickedMesh;
+                startingPoint = getGroundPosition();
+
+                if (startingPoint) {
+                    setTimeout(function() {
+                        selectedObject = currentMesh;
+                        camera.detachControl(canvas);
+                    }, 0);
+                }
+            }
+        };
+
+        const onPointerUp = function() {
+            if (selectedObject) {
+                selectedObject = null;
+                startingPoint = null;
+                camera.attachControl(canvas, true);
+                return;
+            }
+        };
+
+        const onPointerMove = function(evt) {
+            if (!startingPoint) {
+                return;
+            }
+
+            const current = getGroundPosition();
+            if (!current) {
+                return;
+            }
+
+            const diff = current.subtract(startingPoint);
+            selectedObject.position.addInPlace(diff);
+
+            // Ensure the object stays above the ground
+            if (selectedObject.position.y < 2.5) {
+                selectedObject.position.y = 2.5;
+            }
+
+            startingPoint = current;
+        };
+
+        canvas.addEventListener("pointerdown", onPointerDown, false);
+        canvas.addEventListener("pointerup", onPointerUp, false);
+        canvas.addEventListener("pointermove", onPointerMove, false);
+
+        return scene;
+    };
+
+    // Call the createScene function
+    const scene = createScene();
+
+    // Register a render loop to continuously render the scene
+    engine.runRenderLoop(function () {
+        scene.render();
+    });
+
+    // Watch for browser/canvas resize events
+    window.addEventListener("resize", function () {
+        engine.resize();
+    });
+</script>
+</body>
+</html>
